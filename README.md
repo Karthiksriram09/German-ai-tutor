@@ -17,8 +17,6 @@ An **AI-powered German learning assistant** that helps you:
 
 ## 🖼️ Screenshots
 
-> COMING SOON
-
 ### ✍️ Grammar Correction
 ![Grammar Check](screenshots/grammar-check.png)
 
