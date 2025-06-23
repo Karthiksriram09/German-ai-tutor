@@ -1,3 +1,4 @@
+# ---------------------- Imports ----------------------
 import streamlit as st
 import language_tool_python
 from transformers import pipeline
@@ -8,22 +9,25 @@ import datetime
 import os
 import tempfile
 
-# ---------------------- Setup ----------------------
+# ---------------------- Page Configuration ----------------------
 st.set_page_config(page_title="German AI Tutor", layout="centered")
 st.title("🇩🇪 Conversational German Tutor")
 st.markdown("Learn and improve your German with AI, grammar help, flashcards, and voice!")
 
-# ---------------------- Init Tools ----------------------
+# ---------------------- Grammar Checking Tool ----------------------
+# Load German grammar tool
 tool = language_tool_python.LanguageTool('de-DE')
 
+# Load text-generation model for sentence rewriting
 @st.cache_resource
 def load_ai_model():
     return pipeline("text-generation", model="EleutherAI/gpt-neo-125M")
 
 generator = load_ai_model()
 
-# ---------------------- Voice Input ----------------------
+# ---------------------- Voice Input Section ----------------------
 st.subheader("🎤 Voice Input (Optional)")
+
 if st.button("🎙️ Speak Now"):
     r = sr.Recognizer()
     with sr.Microphone() as source:
@@ -36,16 +40,17 @@ if st.button("🎙️ Speak Now"):
     except:
         user_input = ""
         st.error("Could not understand audio. Try again.")
-
 else:
+    # Fallback text area input
     user_input = st.text_area("✍️ Or type your German sentence here:", height=150)
 
-# ---------------------- CEFR Level ----------------------
+# ---------------------- CEFR Level Selection ----------------------
 level = st.selectbox("Choose CEFR Level", ["A1", "A2", "B1", "B2"])
 
-# ---------------------- Sentence Analysis ----------------------
+# ---------------------- Sentence Analysis Section ----------------------
 if st.button("🔍 Analyze Sentence", key="analyze_button"):
     if user_input.strip():
+        # Grammar Check
         matches = tool.check(user_input)
         if not matches:
             st.success("✅ No grammatical errors found. Gut gemacht!")
@@ -58,7 +63,7 @@ if st.button("🔍 Analyze Sentence", key="analyze_button"):
                 ‣ **Suggestion:** `{', '.join(match.replacements) if match.replacements else 'No suggestions'}`  
                 """)
 
-        # AI Rewriting
+        # ---------------------- AI Sentence Rewriting ----------------------
         st.markdown("---")
         st.subheader("🤖 AI Rewriting Suggestion")
         prompt = f"Improve this German sentence politely:\n{user_input}\n\nImproved:"
@@ -66,16 +71,16 @@ if st.button("🔍 Analyze Sentence", key="analyze_button"):
         improved = result.split("Improved:")[-1].strip()
         st.success(improved)
 
-        # Text-to-Speech
+        # ---------------------- Text-to-Speech ----------------------
         tts = gTTS(text=improved, lang="de")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
             tts.save(fp.name)
             st.audio(fp.name, format="audio/mp3")
-
     else:
         st.warning("Please enter or speak a sentence.")
 
-# ---------------------- Flashcards: SQLite Setup ----------------------
+# ---------------------- Flashcard System (Spaced Repetition) ----------------------
+# Create SQLite database and flashcards table
 conn = sqlite3.connect("flashcards.db")
 c = conn.cursor()
 c.execute('''
@@ -93,6 +98,7 @@ conn.commit()
 # ---------------------- Add Vocabulary ----------------------
 st.markdown("---")
 st.subheader("📖 Save Vocabulary to Review")
+
 with st.form("vocab_form"):
     word = st.text_input("German Word or Phrase")
     meaning = st.text_input("English Meaning")
@@ -117,13 +123,16 @@ if rows:
     for rowid, word, meaning in rows:
         st.markdown(f"**📝 {word}** — *{meaning}*")
         if st.button(f"I remembered: {word}", key=f"remember_{rowid}"):
-            # Update SM-2 logic
+            # Spaced Repetition Logic (SM-2 Algorithm - simplified)
             c.execute("SELECT repetition, interval, easiness FROM cards WHERE rowid=?", (rowid,))
             rep, interval, ease = c.fetchone()
+
             rep += 1
             interval = 1 if rep == 1 else round(interval * ease)
-            ease = max(1.3, ease - 0.1)  # simple forgetting curve
+            ease = max(1.3, ease - 0.1)  # reduce easiness if review is needed frequently
+
             next_review = today + datetime.timedelta(days=interval)
+
             c.execute("""
                 UPDATE cards SET repetition=?, interval=?, easiness=?, next_review=?
                 WHERE rowid=?
@@ -132,3 +141,5 @@ if rows:
             st.success(f"🎉 Scheduled next review in {interval} days.")
 else:
     st.info("No flashcards due for today. You're all caught up!")
+
+# ---------------------- End of App ----------------------
